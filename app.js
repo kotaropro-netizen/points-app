@@ -11,6 +11,12 @@ const ymd = (d) => {
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 };
+const lastSubmitDateText = (raw) => {
+  if (!raw) return "—";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  if (raw.includes("T")) return raw.split("T")[0];
+  return raw.slice(0, 10);
+};
 
 const parseNum = (v, fallback = 0) => {
   const n = Number(v);
@@ -332,7 +338,7 @@ function computeBuiltinDelta(dateStr, draft) {
   // 習慣
   addLine(`歯磨き×${draft.tooth}`, draft.tooth * c.toothPt);
   addLine(`スキンケア×${draft.skin}`, draft.skin * c.skinPt);
-  addLine(`ウォーターフロッサー×${draft.water}`, draft.water * c.waterPt);
+  addLine(`ウォータフロッサー×${draft.water}`, draft.water * c.waterPt);
   addLine(`日記×${draft.diary}`, draft.diary * c.diaryPt);
 
   // 継続（加点）
@@ -825,7 +831,7 @@ function renderHeader() {
   const diff = daySum(currentDate) - daySum(ymd(d1));
   ui.ydayDiffText.textContent = (diff >= 0 ? "+" : "") + fmt1(diff);
 
-  ui.lastSubmitText.textContent = b.lastSubmitIso ? b.lastSubmitIso.slice(0,16).replace("T"," ") : "—";
+  ui.lastSubmitText.textContent = lastSubmitDateText(b.lastSubmitIso);
 
   const goal = parseNum(state.config.goalPt, 0);
   const remain = Math.max(0, goal - parseNum(b.balance,0));
@@ -871,7 +877,9 @@ function loadDraftToUI(alsoInputs = true) {
 
 /* ---------- Modal ---------- */
 let modalResolve = null;
-function openModal(title, bodyHtml) {
+function openModal(title, bodyHtml, options = {}) {
+  ui.modalOk.textContent = options.okText ?? "確定";
+  ui.modalCancel.textContent = options.cancelText ?? "戻る";
   ui.modalTitle.textContent = title;
   ui.modalBody.innerHTML = bodyHtml;
   ui.modal.classList.remove("hidden");
@@ -929,7 +937,7 @@ ui.submitBtn.addEventListener("click", async () => {
 
   applyDeltaToBalances(total);
 
-  state.balances.lastSubmitIso = nowIso();
+  state.balances.lastSubmitIso = currentDate;
   day.logs.push({
     ts: nowIso(),
     type: "submit",
@@ -1001,7 +1009,9 @@ async function buyItem(id, kind) {
   const bal = parseNum(state.balances.balance,0);
   const debt = parseNum(state.balances.debt,0);
   const needDebt = Math.max(0, cost - bal);
+  const balanceAfter = Math.max(0, bal - cost);
   const debtAfter = debt + needDebt;
+  const debtDelta = debtAfter - debt;
 
   if (debtAfter > cap && cap > 0) {
     await openModal("購入できません", `
@@ -1015,9 +1025,16 @@ async function buyItem(id, kind) {
     <div class="muted small">日付：${currentDate}</div>
     <div class="row space mt"><div>${it.name}</div><div class="price">-${fmt1(cost)}</div></div>
     <div class="muted small mt">残高不足分は借金に回ります（全部借金OK）。</div>
-    <div class="muted small mt">反映後予測：残高 ${fmt1(Math.max(0, bal - cost))} / 借金 ${fmt1(debtAfter)}</div>
+    <div class="row space mt">
+      <div>残高</div>
+      <div>${fmt1(bal)} → ${fmt1(balanceAfter)}</div>
+    </div>
+    <div class="row space">
+      <div>借金</div>
+      <div>${fmt1(debt)} → ${fmt1(debtAfter)}${debtDelta > 0 ? ` <span class="danger">(+${fmt1(debtDelta)})</span>` : ""}</div>
+    </div>
   `;
-  const ok = await openModal("ストア購入を確定しますか？", html);
+  const ok = await openModal("ストア購入を確定しますか？", html, { okText: "購入確定", cancelText: "キャンセル" });
   if (!ok) return;
 
   const day = ensureDay(currentDate);
@@ -1031,7 +1048,7 @@ async function buyItem(id, kind) {
     state.balances.debt = Math.round((debt + incDebt) * 10) / 10;
   }
 
-  state.balances.lastSubmitIso = nowIso();
+  state.balances.lastSubmitIso = currentDate;
 
   day.logs.push({
     ts: nowIso(),
@@ -1141,7 +1158,7 @@ ui.adjustBtn.addEventListener("click", async () => {
   if (!ok) return;
 
   applyDeltaToBalances(pt);
-  state.balances.lastSubmitIso = nowIso();
+  state.balances.lastSubmitIso = currentDate;
 
   const day = ensureDay(currentDate);
   day.logs.push({
@@ -1240,7 +1257,7 @@ ui.copyConsultBtn.addEventListener("click", async () => {
 残高: ${fmt1(parseNum(b.balance,0))}
 借金: ${fmt1(parseNum(b.debt,0))} / 上限: ${fmt1(cap)}
 前日比(前日): ${(daySum(currentDate)-daySum(prevDayKey(currentDate)))>=0?"+":""}${fmt1(daySum(currentDate)-daySum(prevDayKey(currentDate)))}
-前回送信: ${b.lastSubmitIso ? b.lastSubmitIso : "—"}
+前回送信: ${lastSubmitDateText(b.lastSubmitIso)}
 
 直近7日（日合計）:
 ${sums.join("\n")}
@@ -1553,7 +1570,7 @@ async function editBuiltinStore(id) {
       <input id="bsHidden" type="checkbox" ${curHidden ? "checked" : ""} />
       <span>非表示（＝削除扱い）</span>
     </label>
-    <div class="muted small mt">※確定後は取り消せます（「戻す」でデフォルトに戻ります）。</div>
+    <div class="muted small mt">※確定はり消せます（「戻す」でデフォルトに戻ります）。</div>
   `;
   const ok = await openModal("標準ストア商品を編集", html);
   if (!ok) return;
