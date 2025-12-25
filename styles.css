@@ -201,6 +201,7 @@ h4{margin:0 0 10px 0}
 .item h4{margin:0 0 6px 0}
 .price{font-weight:900; font-size:18px}
 .pill{display:inline-block; padding:2px 8px; border-radius:999px; background:rgba(14,165,164,0.12); border:1px solid rgba(14,165,164,0.35); font-size:11px; color:var(--muted); font-weight:800}
+.danger{color:var(--danger); font-weight:900}
 
 .list{
   border:1px dashed rgba(221,231,227,0.9);
